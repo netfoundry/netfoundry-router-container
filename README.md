@@ -19,7 +19,5 @@ If you want to download ziti binary from a specific url:
 * docker run -v /home/ziggy/router2/:/etc/netfoundry/ --env REG_KEY=<Registration Key> --env OVERRIDE_DOWNLOAD_URL=<url_link>
 
 **WARNING when using OVERRIDE_DOWNLOAD_URL**: 
-* This option turns off the automatic update of the binary.
-* To update the binary, restart the container with a new `<url_link>`.
 * The `<url_link>` will be used to download binary every time the container is restarted, so it is important to keep the url up.
 * If the container is restarted without "OVERRIDE_DOWNLOAD_URL" option, it will try to pull binary from github matching controller version.
