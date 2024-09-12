@@ -21,7 +21,10 @@
 # Upgrade from autonomous router: If the autnomous router was created with certs 
 # location "certs/cert.pem", then you can upgrade to this container.
 
-VERSION="1.0"
+# Version: 1.0.  Initial version
+# Version: 1.1.  Support lower environments during registration.
+
+VERSION="1.1"
 
 set -e -o pipefail
 
@@ -154,11 +157,37 @@ if [[ -n "${REG_KEY:-}" && ! -s "${CERT_FILE}" ]]; then
     # user supplied Registration KEY and not registered yet
     echo REGKEY: $REG_KEY
 
+    firsttwo="${REG_KEY:0:2}"
+    length=${#REG_KEY}
+
     # check which network the key comes from
-    if [[ ${#REG_KEY} == "11" ]]; then
+    if [[ $length == "11" ]]; then
+        # V8 production network
         reg_url="https://gateway.production.netfoundry.io/core/v3/edge-router-registrations/${REG_KEY}"
-    else
+    elif [[ $length == "10" ]]; then
+        # V7 production network
         reg_url="https://gateway.production.netfoundry.io/core/v2/edge-routers/register/${REG_KEY}"
+    elif [[ $firsttwo == "SA" ]]; then
+        if [[ $length == "12" ]]; then
+            reg_url="https://gateway.sandbox.netfoundry.io/core/v2/edge-routers/register/${REG_KEY}"
+        elif [[ $length == "13" ]]; then
+            reg_url="https://gateway.sandox.netfoundry.io/core/v3/edge-router-registrations/${REG_KEY}"
+        else
+            echo Sandbox Registration code: $REGKEY is not correct, Length: $length
+            exit
+        fi
+    elif [[ $firsttwo == "ST" ]]; then
+	    if [[ $length == "12" ]]; then
+            reg_url="https://gateway.staging.netfoundry.io/core/v2/edge-routers/register/${REG_KEY}"
+        elif [[ $length == "13" ]]; then
+            reg_url="https://gateway.staging.netfoundry.io/core/v3/edge-router-registrations/${REG_KEY}"
+        else
+	        echo Staging Registration code: $REGKEY is not correct, Length: $length
+            exit
+	    fi
+    else
+	    echo Registration code: $REGKEY is not correct, Length: $length
+        exit
     fi
 
     # contact console to get router information.
