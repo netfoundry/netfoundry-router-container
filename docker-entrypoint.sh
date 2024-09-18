@@ -23,8 +23,9 @@
 
 # Version: 1.0.  Initial version
 # Version: 1.1.  Support lower environments during registration.
+# Version: 1.2.  Support HA.
 
-VERSION="1.1"
+VERSION="1.2"
 
 set -e -o pipefail
 
@@ -71,8 +72,9 @@ get_controller_version()
     then
         echo "No controller address found, no upgrade"
     else
-        #CONTROLLER_VERSION=$(curl -s -k -H -X "https://${CONTROLLER_ADDRESS}:443/edge/v1/version" |jq -r .data.version)
-        CONTROLLER_REP=$(curl -s -k -H -X "https://${CONTROLLER_ADDRESS}:443/edge/v1/version")
+        #CONTROLLER_REP=$(curl -s -k -H -X "https://${CONTROLLER_ADDRESS}:443/edge/v1/version")
+        # for ha, we will need to use different endpoint.
+        CONTROLLER_REP=$(curl -s -k -H -X "https://${CONTROLLER_ADDRESS}:443/edge/client/v1/version")
         
         if jq -e . >/dev/null 2>&1 <<<"$CONTROLLER_REP"; then
             CONTROLLER_VERSION=$(echo ${CONTROLLER_REP} | jq -r .data.version)
@@ -217,8 +219,10 @@ if [[ -n "${REG_KEY:-}" && ! -s "${CERT_FILE}" ]]; then
     zitiVersion=$(echo $response |jq -r .productMetadata.zitiVersion)
 
     # need to figure out CONTROLLER verion
-    CONTROLLER_REP=$(curl -s -k -H -X "https://${networkControllerHost}:443/edge/v1/version")
-    
+    #CONTROLLER_REP=$(curl -s -k -H -X "https://${networkControllerHost}:443/edge/v1/version")
+    # for ha, we will need to use different endpoint.
+    CONTROLLER_REP=$(curl -s -k -H -X "https://${networkControllerHost}:443/edge/client/v1/version")
+
     if jq -e . >/dev/null 2>&1 <<<"$CONTROLLER_REP"; then
         CONTROLLER_VERSION=$(echo ${CONTROLLER_REP} | jq -r .data.version)
     else
