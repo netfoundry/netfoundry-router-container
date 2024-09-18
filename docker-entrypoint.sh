@@ -218,17 +218,6 @@ if [[ -n "${REG_KEY:-}" && ! -s "${CERT_FILE}" ]]; then
     # get the ziti version
     zitiVersion=$(echo $response |jq -r .productMetadata.zitiVersion)
 
-    # need to figure out CONTROLLER verion
-    #CONTROLLER_REP=$(curl -s -k -H -X "https://${networkControllerHost}:443/edge/v1/version")
-    # for ha, we will need to use different endpoint.
-    CONTROLLER_REP=$(curl -s -k -H -X "https://${networkControllerHost}:443/edge/client/v1/version")
-
-    if jq -e . >/dev/null 2>&1 <<<"$CONTROLLER_REP"; then
-        CONTROLLER_VERSION=$(echo ${CONTROLLER_REP} | jq -r .data.version)
-    else
-        echo "!!!!!!!!!!Retrieve controller verion Failed."
-    fi
-
     # save jwt retrieved from console, and register router
     echo $jwt > docker.jwt
 
