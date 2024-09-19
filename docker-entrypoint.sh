@@ -18,18 +18,17 @@
 
 # This version supports ziti 1.0.0 or above.
 
-# Upgrade from autonomous router: If the autnomous router was created with certs 
-# location "certs/cert.pem", then you can upgrade to this container.
+# If you upgrade from autonomous router container to use this image: The autonomous router container
+#   must have certs located under "certs/cert.pem".
 
 # Version: 1.0.  Initial version
 # Version: 1.1.  Support lower environments during registration.
 # Version: 1.2.  Support HA.
+# Version: 1.3.  Remove unused variables and harden variable usage.
 
-VERSION="1.2"
+VERSION="1.3"
 
 set -e -o pipefail
-
-LOGFILE="ziti-router.log"
 
 # create router config for docker
 # this will be edge only with tunnerl in host mode
@@ -41,23 +40,23 @@ register_router()
 
     # create proxy setting if exist
     if [[ -n "${HTTPS_PROXY:-}" ]]; then
-        PROXY_TYPE=$(echo $HTTPS_PROXY |awk -F ':' '{print $1}')
-        PROXY_ADDRESS=$(echo $HTTPS_PROXY |awk -F ':' '{print $2}')
-        PROXY_ADDRESS=$(echo $PROXY_ADDRESS |awk -F '/' '{print $3}')
-        PROXY_PORT=$(echo $HTTPS_PROXY |awk -F ':' '{print $3}')
+        PROXY_TYPE=$(echo "${HTTPS_PROXY}" |awk -F ':' '{print $1}')
+        PROXY_ADDRESS=$(echo "${HTTPS_PROXY}" |awk -F ':' '{print $2}')
+        PROXY_ADDRESS=$(echo "${PROXY_ADDRESS}" |awk -F '/' '{print $3}')
+        PROXY_PORT=$(echo "${HTTPS_PROXY}" |awk -F ':' '{print $3}')
         #echo TYPE: $PROXY_TYPE
         #echo ADDRESS: $PROXY_ADDRESS
         #echo PORT: $PROXY_PORT
 
-        /ziti_router_auto_enroll -n -j docker.jwt --tunnelListener 'host' --installDir /etc/netfoundry \
-        --controllerFabricPort $ZITI_CTRL_ADVERTISED_PORT \
-        --proxyType $PROXY_TYPE --proxyAddress $PROXY_ADDRESS --proxyPort $PROXY_PORT \
-        --downloadUrl $upgradelink --skipSystemd
+        /ziti_router_auto_enroll -f -n -j docker.jwt --tunnelListener 'host' --installDir /etc/netfoundry \
+        --controllerFabricPort ${ZITI_CTRL_ADVERTISED_PORT} \
+        --proxyType ${PROXY_TYPE} --proxyAddress ${PROXY_ADDRESS} --proxyPort ${PROXY_PORT} \
+        --downloadUrl ${upgradelink} --skipSystemd
 
     else
-        /ziti_router_auto_enroll -n -j docker.jwt --tunnelListener 'host' --installDir /etc/netfoundry \
-        --controllerFabricPort $ZITI_CTRL_ADVERTISED_PORT \
-        --downloadUrl $upgradelink --skipSystemd
+        /ziti_router_auto_enroll -f -n -j docker.jwt --tunnelListener 'host' --installDir /etc/netfoundry \
+        --controllerFabricPort ${ZITI_CTRL_ADVERTISED_PORT} \
+        --downloadUrl ${upgradelink} --skipSystemd
     fi
 }
 
@@ -68,7 +67,7 @@ get_controller_version()
 
     echo -e "controller_address: ${CONTROLLER_ADDRESS}"
 
-    if [ -z $CONTROLLER_ADDRESS ]
+    if [ -z ${CONTROLLER_ADDRESS} ]
     then
         echo "No controller address found, no upgrade"
     else
@@ -145,19 +144,19 @@ upgrade_ziti()
 # main code starts here
 #
 # look to see if the ziti-router is already registered
-echo Version: $VERSION
+echo "Version: ${VERSION}"
 
 cd /etc/netfoundry/
 
 aarch=$(uname -m)
-echo $aarch
+echo "Arch: ${aarch}"
 CERT_FILE="certs/cert.pem"
 
 # check registration key, if the certs are already created, the registraion key option is ignore.
 # If you need to re-registration with old directory, delete the certs directory first.
 if [[ -n "${REG_KEY:-}" && ! -s "${CERT_FILE}" ]]; then
     # user supplied Registration KEY and not registered yet
-    echo REGKEY: $REG_KEY
+    echo REG_KEY: $REG_KEY
 
     firsttwo="${REG_KEY:0:2}"
     length=${#REG_KEY}
@@ -175,7 +174,7 @@ if [[ -n "${REG_KEY:-}" && ! -s "${CERT_FILE}" ]]; then
         elif [[ $length == "13" ]]; then
             reg_url="https://gateway.sandox.netfoundry.io/core/v3/edge-router-registrations/${REG_KEY}"
         else
-            echo Sandbox Registration code: $REGKEY is not correct, Length: $length
+            echo "Sandbox Registration code: ${REG_KEY} is not correct, Length: ${length}"
             exit
         fi
     elif [[ $firsttwo == "ST" ]]; then
@@ -184,42 +183,38 @@ if [[ -n "${REG_KEY:-}" && ! -s "${CERT_FILE}" ]]; then
         elif [[ $length == "13" ]]; then
             reg_url="https://gateway.staging.netfoundry.io/core/v3/edge-router-registrations/${REG_KEY}"
         else
-	        echo Staging Registration code: $REGKEY is not correct, Length: $length
+	        echo "Staging Registration code: ${REG_KEY} is not correct, Length: ${length}"
             exit
 	    fi
     else
-	    echo Registration code: $REGKEY is not correct, Length: $length
+	    echo "Registration code: ${REG_KEY} is not correct, Length: ${length}"
         exit
     fi
 
     # contact console to get router information.
     response=$(curl -k -d -H "Content-Type: application/json" -X POST ${reg_url})
-    echo $response >reg_response
-    jwt=$(echo $response |jq -r .edgeRouter.jwt)
-    networkControllerHost=$(echo $response |jq -r .networkControllerHost)
-
+    echo "${response}" >reg_response
+    jwt=$(echo "${response}" |jq -r .edgeRouter.jwt)
+    
     if [[ -n "${OVERRIDE_DOWNLOAD_URL:-}" ]]; then
         echo "URL supplied by user"
         upgradelink=$OVERRIDE_DOWNLOAD_URL
     else
         # get the link to the binary based on the architecture.
         if [[ $aarch == "aarch64" ]]; then
-            upgradelink=$(echo $response |jq -r .productMetadata.zitiBinaryBundleLinuxARM64)
+            upgradelink=$(echo "${response}" |jq -r .productMetadata.zitiBinaryBundleLinuxARM64)
         elif [[ $aarch == "armv7l" ]]; then
-            upgradelink=$(echo ${response} | jq -r .productMetadata.zitiBinaryBundleLinuxARM)
+            upgradelink=$(echo "${response}" | jq -r .productMetadata.zitiBinaryBundleLinuxARM)
         else
-            upgradelink=$(echo $response |jq -r .productMetadata.zitiBinaryBundleLinuxAMD64)
+            upgradelink=$(echo "${response}" |jq -r .productMetadata.zitiBinaryBundleLinuxAMD64)
         fi
     fi 
     #echo $jwt
     #echo $networkControllerHost
     #echo $upgradelink
 
-    # get the ziti version
-    zitiVersion=$(echo $response |jq -r .productMetadata.zitiVersion)
-
     # save jwt retrieved from console, and register router
-    echo $jwt > docker.jwt
+    echo "${jwt}" > docker.jwt
 
     # create router config
     register_router
@@ -259,10 +254,10 @@ else
             ZITI_VERSION="Not Found"
         fi
         
-        echo Router version: $ZITI_VERSION
+        echo "Router version: ${ZITI_VERSION}"
 
         # check if the version is the same
-        if [ "$CONTROLLER_VERSION" == "$ZITI_VERSION" ]; then
+        if [ "$CONTROLLER_VERSION" == "${ZITI_VERSION}" ]; then
             echo "Ziti version match, no download necessary"
         else
             upgrade_ziti
@@ -273,7 +268,7 @@ fi
 echo "INFO: running ziti-router"
 
 # turn on the verbose mode if user defines it
-if [ -z "$VERBOSE" ]; then
+if [ -z "${VERBOSE}" ]; then
    OPS=""
 else
    OPS="-v"
