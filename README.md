@@ -21,3 +21,8 @@ If you want to download ziti binary from a specific url:
 **WARNING when using OVERRIDE_DOWNLOAD_URL**: 
 * The `<url_link>` will be used to download binary every time the container is restarted, so it is important to keep the url up.
 * If the container is restarted without "OVERRIDE_DOWNLOAD_URL" option, it will try to pull binary from github matching controller version.
+
+**ADVERTISE_ADDRESS** should be in the form of: <address>:<port>
+docker container should also map the <port> to internal port 443
+
+**TUNNEL_MODE** supports only "auto", it will setup the container to intercept traffic. Without the TUNNEL_MODE specified, the container will run in host mode only.
