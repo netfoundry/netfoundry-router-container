@@ -25,13 +25,13 @@
 # Version: 1.1.  Support lower environments during registration.
 # Version: 1.2.  Support HA.
 # Version: 1.3.  Remove unused variables and harden variable usage.
+# Version: 1.5.  Add "ADVERTISE_ADDRESS" and "TUNNEL_MODE"
 
-VERSION="1.3"
+VERSION="1.5"
 
 set -e -o pipefail
 
 # create router config for docker
-# this will be edge only with tunnerl in host mode
 register_router()
 {
     mkdir -p /etc/netfoundry/certs
@@ -48,16 +48,31 @@ register_router()
         #echo ADDRESS: $PROXY_ADDRESS
         #echo PORT: $PROXY_PORT
 
-        /ziti_router_auto_enroll -f -n -j docker.jwt --tunnelListener 'host' --installDir /etc/netfoundry \
-        --controllerFabricPort ${ZITI_CTRL_ADVERTISED_PORT} \
-        --proxyType ${PROXY_TYPE} --proxyAddress ${PROXY_ADDRESS} --proxyPort ${PROXY_PORT} \
-        --downloadUrl ${upgradelink} --skipSystemd
-
+        PROXY_REG_STRING="--proxyType ${PROXY_TYPE} --proxyAddress ${PROXY_ADDRESS} --proxyPort ${PROXY_PORT}"
     else
-        /ziti_router_auto_enroll -f -n -j docker.jwt --tunnelListener 'host' --installDir /etc/netfoundry \
-        --controllerFabricPort ${ZITI_CTRL_ADVERTISED_PORT} \
-        --downloadUrl ${upgradelink} --skipSystemd
+        PROXY_REG_STRING=""
     fi
+
+    if [[ -n "${ADVERTISE_ADDRESS:-}" ]]; then
+        ADVERTISE_REG_STRING="--edgeListeners tls:0.0.0.0:443 ${ADVERTISE_ADDRESS}"
+    else
+        ADVERTISE_REG_STRING=""
+    fi
+
+    TUNNEL_OPTION="--tunnelListener 'host'"
+
+    if [[ -n "${TUNNEL_MODE:-}" ]]; then
+        if [[ ${TUNNEL_MODE} == "auto" ]]; then
+            TUNNEL_OPTION="--autoTunnelListener"
+        else
+            echo "Unknown TUNNEL_MODE options: ${TUNNEL_MODE}, use default host mode instead"
+        fi
+    fi
+
+    /ziti_router_auto_enroll -f -n -j docker.jwt ${TUNNEL_OPTION} --installDir /etc/netfoundry \
+        --controllerFabricPort ${ZITI_CTRL_ADVERTISED_PORT} \
+        ${PROXY_REG_STRING} ${ADVERTISE_REG_STRING}\
+        --downloadUrl ${upgradelink} --skipSystemd
 }
 
 get_controller_version()
@@ -152,7 +167,7 @@ aarch=$(uname -m)
 echo "Arch: ${aarch}"
 CERT_FILE="certs/cert.pem"
 
-# check registration key, if the certs are already created, the registraion key option is ignore.
+# check registration key, if the certs are already created, the registration key option is ignore.
 # If you need to re-registration with old directory, delete the certs directory first.
 if [[ -n "${REG_KEY:-}" && ! -s "${CERT_FILE}" ]]; then
     # user supplied Registration KEY and not registered yet
@@ -172,7 +187,7 @@ if [[ -n "${REG_KEY:-}" && ! -s "${CERT_FILE}" ]]; then
         if [[ $length == "12" ]]; then
             reg_url="https://gateway.sandbox.netfoundry.io/core/v2/edge-routers/register/${REG_KEY}"
         elif [[ $length == "13" ]]; then
-            reg_url="https://gateway.sandox.netfoundry.io/core/v3/edge-router-registrations/${REG_KEY}"
+            reg_url="https://gateway.sandbox.netfoundry.io/core/v3/edge-router-registrations/${REG_KEY}"
         else
             echo "Sandbox Registration code: ${REG_KEY} is not correct, Length: ${length}"
             exit
